@@ -36,4 +36,5 @@ export interface BuildingParams {
   signProbability?: number; // 0-1, default 0.3
   signText?: string; // default random from word pool
   palette?: 'cyberpunk' | 'brutalist' | 'glass' | string[]; // default 'cyberpunk'
+  sideBillboardProb?: number; // 0-1, chance of a side billboard, default 0.4
 }

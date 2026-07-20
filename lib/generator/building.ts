@@ -7,6 +7,12 @@ const SIGN_WORDS = [
   'BYTE', 'DRIFT', 'SLICE', 'CHROME', 'EDGE', 'HACK',
 ];
 
+const BILLBOARD_WORDS = [
+  'DRINK', 'BUY', 'OBEY', 'SLEEP', 'CONSUME', 'NEON',
+  'SYNTH', 'HACK', 'VOID', 'PULSE', 'GRID', 'DATA',
+  'CHROME', 'EDGE', 'BYTE', 'NOODLE', 'SUSHI', 'CYBER',
+];
+
 const PALETTES: Record<string, string[]> = {
   cyberpunk: ['#1a1a2e', '#00ffff', '#0f3460', '#e94560', '#ff00ff'],
   brutalist: ['#4a4a4a', '#6b6b6b', '#2d2d2d', '#8a8a8a', '#1a1a1a'],
@@ -41,6 +47,7 @@ export function generateBuilding(
   const height = floors * floorHeight;
   const acProb = params.acProbability ?? 0.7;
   const signProb = params.signProbability ?? 0.3;
+  const billboardProb = params.sideBillboardProb ?? 0.4;
   const windowW = params.windowStyle === 'wide' ? 0.4 : params.windowStyle === 'narrow' ? 0.15 : 0.25;
 
   const parts: Part[] = [];
@@ -125,6 +132,42 @@ export function generateBuilding(
       emissive: palette[4],
       text: signText,
     });
+  }
+
+  // side billboards — large panels on one or both side faces
+  if (rng() < billboardProb) {
+    const billboardW = depth * 0.7;
+    const billboardH = height * 0.6;
+    const billboardY = height * 0.55;
+    const billboardText =
+      BILLBOARD_WORDS[Math.floor(rng() * BILLBOARD_WORDS.length)];
+    const sideOffset = width / 2 + 0.05;
+
+    // left side (X-)
+    parts.push({
+      type: 'plane',
+      position: [-sideOffset, billboardY, 0],
+      rotation: [0, -Math.PI / 2, 0],
+      scale: [billboardW, billboardH, 1],
+      color: '#222233',
+      emissive: palette[4],
+      text: billboardText,
+    });
+
+    // right side (X+) — only sometimes, for asymmetry
+    if (rng() > 0.5) {
+      const text2 =
+        BILLBOARD_WORDS[Math.floor(rng() * BILLBOARD_WORDS.length)];
+      parts.push({
+        type: 'plane',
+        position: [sideOffset, billboardY, 0],
+        rotation: [0, Math.PI / 2, 0],
+        scale: [billboardW, billboardH, 1],
+        color: '#222233',
+        emissive: palette[4],
+        text: text2,
+      });
+    }
   }
 
   return {

@@ -125,7 +125,7 @@ export default function CityCanvas() {
 
     // buildings — two variations side by side with different styles
     const buildingSpecs: BuildingSpec[] = [
-      { params: { floors: 8, palette: 'cyberpunk', windowStyle: 'regular' }, seed: 42 },
+      { params: { floors: 8, palette: 'cyberpunk', windowStyle: 'regular', sideBillboardProb: 0 }, seed: 42 },
       { params: { floors: 15, palette: 'brutalist', windowStyle: 'wide' }, seed: 99 },
     ];
     const buildings = generateBuildings(buildingSpecs);
