@@ -54,9 +54,9 @@ export function generateBuilding(
     color: palette[0],
   });
 
-  // door — centered on front face at ground level
+  // door — centered on front face at ground level, human-scale (fixed ~0.6 units)
   const doorW = width * 0.25;
-  const doorH = floorHeight * 1.8;
+  const doorH = 0.6;
   const doorD = 0.1;
   parts.push({
     type: 'box',
