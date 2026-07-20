@@ -1,0 +1,4 @@
+ruleDirs:
+  - .github/idd/checks
+testConfigs:
+  - testDir: .github/idd/check-tests

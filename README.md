@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Procedural Cyberpunk City
 
-## Getting Started
+TypeScript library for procedural generation of cyberpunk 3D cities using Three.js primitives. Interactive showcase built with Next.js.
 
-First, run the development server:
+## Concept
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+All urban geometry — buildings, blocks, streets, facade details — is generated procedurally at runtime. No pre-modeled 3D assets, no textures. Each seed deterministically produces the same city. The library is pure (no React/Next.js dependency) and lives inside this repository as a showcase.
+
+### Scale
+
+- **500+ buildings** in scene with viable performance (instancing strategy)
+- Urban grid with **procedural layout** and zoning (commercial, industrial, residential)
+- Buildings with **parametric variation**: height, segments, setbacks, facade styles, roofs, decorative details
+- **Cyberpunk aesthetic**: neon, concrete, metal, glass — solid colors and emissive materials
+
+### Stack
+
+| Layer | Technology |
+|-------|------------|
+| 3D Engine | Three.js (WebGL) |
+| Procedural library | Pure TypeScript |
+| Showcase | Next.js 16 + React 19 + Tailwind CSS 4 |
+
+## Structure
+
+```
+lib/                     ← Core library (to be implemented)
+├── city-generator.ts    Entrypoint: full city generation
+├── city-layout.ts       Block grid and streets
+├── building-generator.ts Individual building generation
+├── facade-generator.ts  Facades, windows, details
+├── roof-generator.ts    Building tops
+├── types.ts             Public interfaces and types
+└── utils/               PRNG, geometry helpers, palettes
+
+app/                     ← Next.js showcase
+├── page.tsx             Main page
+├── layout.tsx           Base layout
+└── _components/         React components (canvas, controls)
+
+.github/idd/             ← IDD documentation
+├── architecture.md      Architecture and runtime
+├── conventions.md       Code conventions
+├── learned.md           Learned rules
+└── wiki/                Domain articles
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Development
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev      # Next.js dev server at localhost:3000
+npm run build    # Production build
+npm run lint     # ESLint
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Roadmap
 
-## Learn More
+1. [ ] Add `three` and `@types/three` as dependencies
+2. [ ] Implement `lib/city-generator.ts` — generation pipeline
+3. [ ] Implement `lib/building-generator.ts` — buildings
+4. [ ] Create Three.js canvas in showcase React component
+5. [ ] Orbital camera system and controls
+6. [ ] Instancing strategy for scale
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+*Greenfield project — July 2026*
