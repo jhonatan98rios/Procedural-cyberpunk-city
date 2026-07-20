@@ -41,7 +41,7 @@ function createGroup(building: Building): THREE.Group {
     const mesh = buildMesh(part);
     group.add(mesh);
 
-    // ponytail: point light on emissive signs/billboards only, not every window
+    // ponytail: point light on emissive signs/billboards only
     if (part.emissive && part.text) {
       const light = new THREE.PointLight(part.emissive, 2, 5);
       light.position.set(...part.position);
@@ -74,15 +74,13 @@ export default function CityCanvas() {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
-    // scene
+    // scene — dark purple sky, not black
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0a0a0f');
-    scene.fog = new THREE.Fog('#0a0a0f', 15, 60);
+    scene.background = new THREE.Color('#110022');
 
     // camera
     const camera = new THREE.PerspectiveCamera(50, width / height, 1, 200);
@@ -99,81 +97,40 @@ export default function CityCanvas() {
     controls.maxPolarAngle = Math.PI * 0.45;
     controls.update();
 
-    // lights
-    const hemiLight = new THREE.HemisphereLight('#8899cc', '#221144', 0.9);
+    // ambient + hemisphere — base scene light
+    const ambient = new THREE.AmbientLight('#221144', 0.6);
+    scene.add(ambient);
+
+    const hemiLight = new THREE.HemisphereLight('#8899cc', '#221144', 0.7);
     scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight('#ffccaa', 1.5);
-    dirLight.position.set(20, 30, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.set(1024, 1024);
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 100;
-    dirLight.shadow.camera.left = -30;
-    dirLight.shadow.camera.right = 30;
-    dirLight.shadow.camera.top = 30;
-    dirLight.shadow.camera.bottom = -5;
-    scene.add(dirLight);
-
-    // city layout params
-    const cols = 5;
-    const rows = 5;
-    const spacing = 7;
-
     // ground
-    const groundSize = cols * spacing + 10;
-    const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
+    const groundGeo = new THREE.PlaneGeometry(40, 40);
     const groundMat = new THREE.MeshStandardMaterial({
       color: '#111122',
       roughness: 0.9,
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
     scene.add(ground);
 
-    // street grid
-    const gridSize = (cols * spacing) / 2 + 2;
-    const gridHelper = new THREE.PolarGridHelper(gridSize, 32, 24, 128);
+    // grid
+    const gridHelper = new THREE.PolarGridHelper(18, 32, 16, 128);
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
-    // buildings — grid layout
-    const buildingSpecs: BuildingSpec[] = [];
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        buildingSpecs.push({
-          params: {
-            floors: 3 + Math.floor(Math.random() * 18),
-            palette: (['cyberpunk', 'brutalist', 'glass'] as const)[Math.floor(Math.random() * 3)],
-            windowStyle: (['regular', 'wide', 'narrow'] as const)[Math.floor(Math.random() * 3)],
-          },
-          seed: row * cols + col + 100,
-        });
-      }
-    }
+    // buildings — 2 side by side
+    const buildingSpecs: BuildingSpec[] = [
+      { params: { floors: 8, palette: 'cyberpunk', windowStyle: 'regular', sideBillboardProb: 0 }, seed: 42 },
+      { params: { floors: 15, palette: 'brutalist', windowStyle: 'wide' }, seed: 99 },
+    ];
     const buildings = generateBuildings(buildingSpecs);
-
+    const spacing = 8;
     buildings.forEach((building, i) => {
       const group = createGroup(building);
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      group.position.x = (col - (cols - 1) / 2) * spacing;
-      group.position.z = (row - (rows - 1) / 2) * spacing;
+      group.position.x = (i - (buildings.length - 1) / 2) * spacing;
       scene.add(group);
     });
-
-    // ponytail: street-level neon lights between buildings
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols - 1; col++) {
-        const x = (col - (cols - 1) / 2) * spacing + spacing / 2;
-        const z = (row - (rows - 1) / 2) * spacing;
-        const color = ['#ff00ff', '#00ffff', '#ff4400', '#00ff44'][Math.floor(Math.random() * 4)];
-        const light = new THREE.PointLight(color, 1.5, 8);
-        light.position.set(x, 1.5, z);
-        scene.add(light);
-      }
-    }
 
     // render loop
     function animate() {
@@ -183,8 +140,6 @@ export default function CityCanvas() {
     }
     animate();
 
-    // resize
-    // ponytail: non-null assertion — container is guarded at the top of the effect
     function onResize() {
       const w = container!.clientWidth;
       const h = container!.clientHeight;
