@@ -35,12 +35,21 @@ function buildMesh(part: Building['parts'][number]): THREE.Mesh {
   return mesh;
 }
 
-function createScene(building: Building): THREE.Group {
+function createGroup(building: Building): THREE.Group {
   const group = new THREE.Group();
   for (const part of building.parts) {
     group.add(buildMesh(part));
   }
   return group;
+}
+
+interface BuildingSpec {
+  params: Parameters<typeof generateBuilding>[0];
+  seed: number;
+}
+
+function generateBuildings(specs: BuildingSpec[]): Building[] {
+  return specs.map(({ params, seed }) => generateBuilding(params, seed));
 }
 
 export default function CityCanvas() {
@@ -114,10 +123,19 @@ export default function CityCanvas() {
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
-    // building
-    const building = generateBuilding({ floors: 10 }, 42);
-    const buildingGroup = createScene(building);
-    scene.add(buildingGroup);
+    // buildings — two variations side by side with different styles
+    const buildingSpecs: BuildingSpec[] = [
+      { params: { floors: 8, palette: 'cyberpunk', windowStyle: 'regular' }, seed: 42 },
+      { params: { floors: 15, palette: 'brutalist', windowStyle: 'wide' }, seed: 99 },
+    ];
+    const buildings = generateBuildings(buildingSpecs);
+    const spacing = 8;
+    buildings.forEach((building, i) => {
+      const group = createGroup(building);
+      const offsetX = (i - (buildings.length - 1) / 2) * spacing;
+      group.position.x = offsetX;
+      scene.add(group);
+    });
 
     // render loop
     function animate() {
