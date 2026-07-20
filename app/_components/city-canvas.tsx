@@ -92,10 +92,10 @@ export default function CityCanvas() {
     controls.update();
 
     // lights
-    const ambient = new THREE.AmbientLight('#445566', 0.6);
-    scene.add(ambient);
+    const hemiLight = new THREE.HemisphereLight('#8899cc', '#221144', 0.9);
+    scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight('#ffeedd', 2);
+    const dirLight = new THREE.DirectionalLight('#ffccaa', 1.5);
     dirLight.position.set(20, 30, 10);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.set(1024, 1024);
