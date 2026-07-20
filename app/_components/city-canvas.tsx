@@ -38,7 +38,15 @@ function buildMesh(part: Building['parts'][number]): THREE.Mesh {
 function createGroup(building: Building): THREE.Group {
   const group = new THREE.Group();
   for (const part of building.parts) {
-    group.add(buildMesh(part));
+    const mesh = buildMesh(part);
+    group.add(mesh);
+
+    // ponytail: point light on emissive signs/billboards only, not every window
+    if (part.emissive && part.text) {
+      const light = new THREE.PointLight(part.emissive, 2, 5);
+      light.position.set(...part.position);
+      group.add(light);
+    }
   }
   return group;
 }
@@ -74,7 +82,7 @@ export default function CityCanvas() {
     // scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#0a0a0f');
-    scene.fog = new THREE.Fog('#0a0a0f', 20, 80);
+    scene.fog = new THREE.Fog('#0a0a0f', 15, 60);
 
     // camera
     const camera = new THREE.PerspectiveCamera(50, width / height, 1, 200);
@@ -107,8 +115,14 @@ export default function CityCanvas() {
     dirLight.shadow.camera.bottom = -5;
     scene.add(dirLight);
 
+    // city layout params
+    const cols = 5;
+    const rows = 5;
+    const spacing = 7;
+
     // ground
-    const groundGeo = new THREE.PlaneGeometry(60, 60);
+    const groundSize = cols * spacing + 10;
+    const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat = new THREE.MeshStandardMaterial({
       color: '#111122',
       roughness: 0.9,
@@ -118,24 +132,48 @@ export default function CityCanvas() {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // grid lines
-    const gridHelper = new THREE.PolarGridHelper(25, 32, 24, 128);
+    // street grid
+    const gridSize = (cols * spacing) / 2 + 2;
+    const gridHelper = new THREE.PolarGridHelper(gridSize, 32, 24, 128);
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
-    // buildings — two variations side by side with different styles
-    const buildingSpecs: BuildingSpec[] = [
-      { params: { floors: 8, palette: 'cyberpunk', windowStyle: 'regular', sideBillboardProb: 0 }, seed: 42 },
-      { params: { floors: 15, palette: 'brutalist', windowStyle: 'wide' }, seed: 99 },
-    ];
+    // buildings — grid layout
+    const buildingSpecs: BuildingSpec[] = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        buildingSpecs.push({
+          params: {
+            floors: 3 + Math.floor(Math.random() * 18),
+            palette: (['cyberpunk', 'brutalist', 'glass'] as const)[Math.floor(Math.random() * 3)],
+            windowStyle: (['regular', 'wide', 'narrow'] as const)[Math.floor(Math.random() * 3)],
+          },
+          seed: row * cols + col + 100,
+        });
+      }
+    }
     const buildings = generateBuildings(buildingSpecs);
-    const spacing = 8;
+
     buildings.forEach((building, i) => {
       const group = createGroup(building);
-      const offsetX = (i - (buildings.length - 1) / 2) * spacing;
-      group.position.x = offsetX;
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      group.position.x = (col - (cols - 1) / 2) * spacing;
+      group.position.z = (row - (rows - 1) / 2) * spacing;
       scene.add(group);
     });
+
+    // ponytail: street-level neon lights between buildings
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols - 1; col++) {
+        const x = (col - (cols - 1) / 2) * spacing + spacing / 2;
+        const z = (row - (rows - 1) / 2) * spacing;
+        const color = ['#ff00ff', '#00ffff', '#ff4400', '#00ff44'][Math.floor(Math.random() * 4)];
+        const light = new THREE.PointLight(color, 1.5, 8);
+        light.position.set(x, 1.5, z);
+        scene.add(light);
+      }
+    }
 
     // render loop
     function animate() {
