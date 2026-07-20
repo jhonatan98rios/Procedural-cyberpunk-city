@@ -1,0 +1,37 @@
+{
+  "$comment": "IDD in-session enforcement — Claude Code hooks. PostToolUse runs the committed ast-grep checks against each edited file. PreToolUse is the commit gate: the same checks over the tree, plus verification of the judgment attestation against the staged fingerprint (deterministic — the gate verifies evidence, it never invokes an LLM). Stop is the completion gate: it verifies the attestation against the worktree fingerprint and blocks task completion with 'run /idd-judgment-review' when the review is missing, failed, or stale. Failures feed back as exit-code-2 stderr. Silent no-op when tools are missing or nothing applies, so adopting IDD never breaks a repo.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty' 2>/dev/null); [ -n \"$f\" ] || exit 0; command -v ast-grep >/dev/null 2>&1 || exit 0; ls .github/idd/checks/*.yml >/dev/null 2>&1 || exit 0; out=$(ast-grep scan --config sgconfig.yml \"$f\" 2>&1) || { printf 'IDD mechanical check failed — fix before proposing this diff:\\n%s\\n' \"$out\" >&2; exit 2; }"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // empty' 2>/dev/null); case \"$cmd\" in *'git commit'*) ;; *) exit 0;; esac; if command -v ast-grep >/dev/null 2>&1 && ls .github/idd/checks/*.yml >/dev/null 2>&1; then out=$(ast-grep scan --config sgconfig.yml 2>&1) || { printf 'IDD commit gate: mechanical checks failed — fix before committing:\\n%s\\n' \"$out\" >&2; exit 2; }; fi; if [ -f .github/idd/bin/idd-gate.sh ]; then out=$(bash .github/idd/bin/idd-gate.sh gate staged 2>&1) || { printf '%s\\n' \"$out\" >&2; exit 2; }; fi"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=$(cat); command -v jq >/dev/null 2>&1 || exit 0; [ \"$(printf '%s' \"$p\" | jq -r '.stop_hook_active // false' 2>/dev/null)\" = \"true\" ] && exit 0; [ -f .github/idd/bin/idd-gate.sh ] || exit 0; out=$(bash .github/idd/bin/idd-gate.sh gate worktree 2>&1) || { printf '%s\\n' \"$out\" >&2; exit 2; }"
+          }
+        ]
+      }
+    ]
+  }
+}

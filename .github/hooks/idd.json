@@ -1,0 +1,27 @@
+{
+  "$comment": "IDD in-session enforcement — GitHub Copilot hooks (CLI, cloud coding agent, VS Code agent mode; installed as .github/hooks/idd.json). Envelope follows the field-observed contract: PascalCase event names, command + timeout entry fields, and deny decisions emitted both top-level (CLI) and under hookSpecificOutput (VS Code). PostToolUse runs the committed ast-grep checks on edited files, including paths extracted from V4A apply_patch input records. PreToolUse is the commit gate: mechanical checks plus verification of the judgment attestation against the staged fingerprint. Stop is the completion gate: attestation vs the worktree fingerprint, blocking with 'run /idd-judgment-review' when missing, failed, or stale. Gates are deterministic — they verify evidence, they never invoke an LLM. Hooks never signal by exit code (exit 2 means warn-and-continue in Copilot): they emit stdout JSON and exit 0. Silent no-op when tools are missing or nothing applies.",
+  "version": 1,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "p=$(cat); command -v jq >/dev/null 2>&1 || exit 0; command -v ast-grep >/dev/null 2>&1 || exit 0; ls .github/idd/checks/*.yml >/dev/null 2>&1 || exit 0; t=$(printf '%s' \"$p\" | jq -r '.toolName // .tool_name // empty' 2>/dev/null); case \"$t\" in edit|create|str_replace_editor|apply_patch|Edit|Write) ;; *) exit 0;; esac; fs=$(printf '%s' \"$p\" | jq -r '.toolArgs.path // .toolArgs.filePath // .toolArgs.file_path // .tool_input.path // .tool_input.filePath // .tool_input.file_path // empty' 2>/dev/null); if [ -z \"$fs\" ]; then fs=$(printf '%s' \"$p\" | jq -r '.toolArgs.input // .tool_input.input // empty' 2>/dev/null | sed -n -e 's/^\\*\\*\\* Add File: //p' -e 's/^\\*\\*\\* Update File: //p'); fi; fs=$(printf '%s\\n' \"$fs\" | while IFS= read -r f; do [ -n \"$f\" ] && [ -f \"$f\" ] && printf '%s\\n' \"$f\"; done); [ -n \"$fs\" ] || exit 0; out=$(printf '%s\\n' \"$fs\" | xargs ast-grep scan --config sgconfig.yml 2>&1) || { ctx=$(printf 'IDD mechanical check failed — fix before proposing this diff:\\n%s\\n' \"$out\" | jq -Rs .); printf '{\"additionalContext\":%s}\\n' \"$ctx\"; }; exit 0",
+        "timeout": 60
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "p=$(cat); command -v jq >/dev/null 2>&1 || exit 0; t=$(printf '%s' \"$p\" | jq -r '.toolName // .tool_name // empty' 2>/dev/null); case \"$t\" in bash|powershell|run_in_terminal|Bash) ;; *) exit 0;; esac; cmd=$(printf '%s' \"$p\" | jq -r '.toolArgs.command // .tool_input.command // empty' 2>/dev/null); case \"$cmd\" in *'git commit'*) ;; *) exit 0;; esac; deny(){ r=$(printf '%s\\n' \"$1\" | jq -Rs .); printf '{\"permissionDecision\":\"deny\",\"permissionDecisionReason\":%s,\"hookSpecificOutput\":{\"permissionDecision\":\"deny\",\"permissionDecisionReason\":%s}}\\n' \"$r\" \"$r\"; exit 0; }; if command -v ast-grep >/dev/null 2>&1 && ls .github/idd/checks/*.yml >/dev/null 2>&1; then out=$(ast-grep scan --config sgconfig.yml 2>&1) || deny \"$(printf 'IDD commit gate: mechanical checks failed — fix before committing:\\n%s' \"$out\")\"; fi; if [ -f .github/idd/bin/idd-gate.sh ]; then out=$(bash .github/idd/bin/idd-gate.sh gate staged 2>&1) || deny \"$out\"; fi; exit 0",
+        "timeout": 120
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "command -v jq >/dev/null 2>&1 || exit 0; [ -f .github/idd/bin/idd-gate.sh ] || exit 0; out=$(bash .github/idd/bin/idd-gate.sh gate worktree 2>&1) || { r=$(printf '%s\\n' \"$out\" | jq -Rs .); printf '{\"decision\":\"block\",\"reason\":%s}\\n' \"$r\"; }; exit 0",
+        "timeout": 120
+      }
+    ]
+  }
+}

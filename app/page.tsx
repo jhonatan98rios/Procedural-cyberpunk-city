@@ -1,9 +1,6 @@
-import dynamic from 'next/dynamic';
+'use client';
 
-// ponytail: dynamic import with ssr:false — Three.js is browser-only
-const CityCanvas = dynamic(() => import('./_components/city-canvas'), {
-  ssr: false,
-});
+import CityCanvas from './_components/city-canvas';
 
 export default function Home() {
   return <CityCanvas />;

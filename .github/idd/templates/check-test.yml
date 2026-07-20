@@ -1,0 +1,23 @@
+# Fixture pair for a compiled mechanical check — shape template.
+#
+# One check -> one file at .github/idd/check-tests/<check-id>-test.yml
+# (a sibling of the checks directory, never inside it — ast-grep
+# parses everything under ruleDirs as rules). `id` matches the check.
+#
+# `invalid` snippets MUST be flagged by the check; `valid` snippets
+# must NOT be. This is what proves the check actually fires — a check
+# whose pattern never matches is indistinguishable from compliance.
+# Written at rule-approval time with the check itself, and re-run by
+# /idd-lint:
+#
+#   ast-grep test -t .github/idd/check-tests --skip-snapshot-tests
+#
+# This template lives under .github/idd/templates/, outside the test
+# discovery path, so the harness never attempts to run it — copy it
+# to .github/idd/check-tests/<check-id>-test.yml alongside the check.
+id: idd-example-rule-slug
+valid:
+  - "x = getattr(obj, name)"
+  - "x = obj.name"
+invalid:
+  - 'x = getattr(obj, "name", None)'
