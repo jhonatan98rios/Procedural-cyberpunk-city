@@ -4,50 +4,94 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { generateBuilding } from '@/lib/generator/building';
-import type { Building } from '@/lib/types';
+import type { Building, Part } from '@/lib/types';
 
-function buildMesh(part: Building['parts'][number]): THREE.Mesh {
-  let geometry: THREE.BufferGeometry;
-  switch (part.type) {
-    case 'box':
-      geometry = new THREE.BoxGeometry(1, 1, 1);
-      break;
-    case 'plane':
-      geometry = new THREE.PlaneGeometry(1, 1);
-      break;
-    case 'cylinder':
-      geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
-      break;
+// ── pony tail: geometry pool — one alloc, reused everywhere ──
+const GEO: Record<string, THREE.BufferGeometry> = {
+  box: new THREE.BoxGeometry(1, 1, 1),
+  plane: new THREE.PlaneGeometry(1, 1),
+  cylinder: new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
+};
+
+// ── pony tail: material pool — keyed by color+emissive ──
+const matPool = new Map<string, THREE.MeshStandardMaterial>();
+function getMat(color: string, emissive?: string): THREE.MeshStandardMaterial {
+  const key = `${color}|${emissive ?? ''}`;
+  let mat = matPool.get(key);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: emissive ?? '#000000',
+      emissiveIntensity: emissive ? 0.8 : 0,
+      roughness: 0.6,
+      metalness: 0.3,
+    });
+    matPool.set(key, mat);
   }
+  return mat;
+}
 
-  const material = new THREE.MeshStandardMaterial({
-    color: part.color,
-    emissive: part.emissive ? part.emissive : '#000000',
-    emissiveIntensity: part.emissive ? 0.8 : 0,
-    roughness: 0.6,
-    metalness: 0.3,
-  });
-
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(...part.position);
-  mesh.rotation.set(...part.rotation);
-  mesh.scale.set(...part.scale);
-  return mesh;
+// ── pony tail: helper — set matrix from Part on dummy, use with InstancedMesh ──
+const _dummy = new THREE.Object3D();
+function setPartMatrix(part: Part): void {
+  _dummy.position.set(...part.position);
+  _dummy.rotation.set(...part.rotation);
+  _dummy.scale.set(...part.scale);
+  _dummy.updateMatrix();
 }
 
 function createGroup(building: Building): THREE.Group {
   const group = new THREE.Group();
-  for (const part of building.parts) {
-    const mesh = buildMesh(part);
-    group.add(mesh);
 
-    // ponytail: point light on emissive signs/billboards only
-    if (part.emissive && part.text) {
-      const light = new THREE.PointLight(part.emissive, 2, 5);
-      light.position.set(...part.position);
-      group.add(light);
+  // classify parts
+  const bodyParts: Part[] = [];
+  // ponytail: group window planes by material key → one InstancedMesh per key
+  const windowGroups = new Map<string, Part[]>();
+  const signParts: Part[] = [];
+
+  for (const part of building.parts) {
+    if (part.text) {
+      signParts.push(part);
+    } else if (part.type === 'plane') {
+      const key = `${part.color}|${part.emissive ?? ''}`;
+      if (!windowGroups.has(key)) windowGroups.set(key, []);
+      windowGroups.get(key)!.push(part);
+    } else {
+      bodyParts.push(part);
     }
   }
+
+  // body parts — individual meshes with cached geo/mat
+  for (const part of bodyParts) {
+    const mesh = new THREE.Mesh(GEO[part.type], getMat(part.color, part.emissive));
+    mesh.position.set(...part.position);
+    mesh.rotation.set(...part.rotation);
+    mesh.scale.set(...part.scale);
+    group.add(mesh);
+  }
+
+  // windows — InstancedMesh, one per material key for batching
+  for (const [, parts] of windowGroups) {
+    if (parts.length === 0) continue;
+    const mat = getMat(parts[0].color, parts[0].emissive);
+    const instanced = new THREE.InstancedMesh(GEO.plane, mat, parts.length);
+    parts.forEach((part, i) => {
+      setPartMatrix(part);
+      instanced.setMatrixAt(i, _dummy.matrix);
+    });
+    instanced.instanceMatrix.needsUpdate = true;
+    group.add(instanced);
+  }
+
+  // signs/billboards — individual meshes, emissive-only (no PointLight)
+  for (const part of signParts) {
+    const mesh = new THREE.Mesh(GEO[part.type], getMat(part.color, part.emissive));
+    mesh.position.set(...part.position);
+    mesh.rotation.set(...part.rotation);
+    mesh.scale.set(...part.scale);
+    group.add(mesh);
+  }
+
   return group;
 }
 
@@ -60,6 +104,8 @@ function generateBuildings(specs: BuildingSpec[]): Building[] {
   return specs.map(({ params, seed }) => generateBuilding(params, seed));
 }
 
+const BUILDING_SPACING = 8;
+
 export default function CityCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -70,7 +116,6 @@ export default function CityCanvas() {
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    // renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -78,34 +123,32 @@ export default function CityCanvas() {
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
-    // scene — dark purple sky, not black
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#110022');
 
-    // camera
-    const camera = new THREE.PerspectiveCamera(50, width / height, 1, 200);
-    camera.position.set(15, 10, 15);
+    const camera = new THREE.PerspectiveCamera(50, width / height, 1, 300);
+    // ponytail: pull camera back for the 5×5 grid
+    camera.position.set(35, 25, 35);
     camera.lookAt(0, 5, 0);
 
-    // controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 5, 0);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 5;
-    controls.maxDistance = 40;
+    controls.minDistance = 8;
+    controls.maxDistance = 120;
     controls.maxPolarAngle = Math.PI * 0.45;
     controls.update();
 
-    // ambient + hemisphere — base scene light
     const ambient = new THREE.AmbientLight('#221144', 0.6);
     scene.add(ambient);
 
     const hemiLight = new THREE.HemisphereLight('#8899cc', '#221144', 0.7);
     scene.add(hemiLight);
 
-    // ground
-    const groundGeo = new THREE.PlaneGeometry(40, 40);
+    // ground — scale up for the larger grid
+    const groundSize = BUILDING_SPACING * 8;
+    const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat = new THREE.MeshStandardMaterial({
       color: '#111122',
       roughness: 0.9,
@@ -114,25 +157,35 @@ export default function CityCanvas() {
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    // grid
-    const gridHelper = new THREE.PolarGridHelper(18, 32, 16, 128);
+    const gridHelper = new THREE.PolarGridHelper(groundSize * 0.45, 64, 32, 128);
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
-    // buildings — 2 side by side
-    const buildingSpecs: BuildingSpec[] = [
-      { params: { floors: 8, palette: 'cyberpunk', windowStyle: 'regular', sideBillboardProb: 0 }, seed: 42 },
-      { params: { floors: 15, palette: 'brutalist', windowStyle: 'wide' }, seed: 99 },
-    ];
+    // ── buildings — 5×5 grid (25 buildings) ──
+    const palettes = ['cyberpunk', 'brutalist', 'glass'] as const;
+    const windowStyles = ['regular', 'wide', 'narrow'] as const;
+    const GRID = 5;
+
+    const buildingSpecs: BuildingSpec[] = [];
+    for (let row = 0; row < GRID; row++) {
+      for (let col = 0; col < GRID; col++) {
+        const seed = row * 100 + col;
+        // ponytail: use seed-driven rng inside generateBuilding, not Math.random here
+        buildingSpecs.push({ params: {}, seed });
+      }
+    }
+
     const buildings = generateBuildings(buildingSpecs);
-    const spacing = 8;
+    const offset = ((GRID - 1) * BUILDING_SPACING) / 2;
     buildings.forEach((building, i) => {
+      const row = Math.floor(i / GRID);
+      const col = i % GRID;
       const group = createGroup(building);
-      group.position.x = (i - (buildings.length - 1) / 2) * spacing;
+      group.position.x = col * BUILDING_SPACING - offset;
+      group.position.z = row * BUILDING_SPACING - offset;
       scene.add(group);
     });
 
-    // render loop
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
