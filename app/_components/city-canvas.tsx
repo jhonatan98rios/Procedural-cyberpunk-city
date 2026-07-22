@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { generateBuilding } from '@/lib/generator/building';
 import type { Building, Part } from '@/lib/types';
 
@@ -31,13 +32,30 @@ function getMat(color: string, emissive?: string): THREE.MeshStandardMaterial {
   return mat;
 }
 
-// ── pony tail: helper — set matrix from Part on dummy, use with InstancedMesh ──
+// ── pony tail: helpers for matrix ops ──
 const _dummy = new THREE.Object3D();
+const _vec = new THREE.Vector3();
+const _quat = new THREE.Quaternion();
+const _euler = new THREE.Euler();
+
 function setPartMatrix(part: Part): void {
   _dummy.position.set(...part.position);
   _dummy.rotation.set(...part.rotation);
   _dummy.scale.set(...part.scale);
   _dummy.updateMatrix();
+}
+
+// clone + bake Part transform into geometry vertices (for mergeGeometries)
+function bakeTransform(geo: THREE.BufferGeometry, part: Part): THREE.BufferGeometry {
+  const cloned = geo.clone();
+  cloned.applyMatrix4(
+    new THREE.Matrix4().compose(
+      _vec.set(...part.position),
+      _quat.setFromEuler(_euler.set(...part.rotation)),
+      _vec.set(...part.scale),
+    ),
+  );
+  return cloned;
 }
 
 function createGroup(building: Building): THREE.Group {
@@ -61,12 +79,17 @@ function createGroup(building: Building): THREE.Group {
     }
   }
 
-  // body parts — individual meshes with cached geo/mat
+  // body parts — group by material, merge geometries per group into one mesh
+  const bodyByMat = new Map<string, Part[]>();
   for (const part of bodyParts) {
-    const mesh = new THREE.Mesh(GEO[part.type], getMat(part.color, part.emissive));
-    mesh.position.set(...part.position);
-    mesh.rotation.set(...part.rotation);
-    mesh.scale.set(...part.scale);
+    const key = `${part.color}|${part.emissive ?? ''}`;
+    if (!bodyByMat.has(key)) bodyByMat.set(key, []);
+    bodyByMat.get(key)!.push(part);
+  }
+  for (const [key, parts] of bodyByMat) {
+    const geos = parts.map((p) => bakeTransform(GEO[p.type], p));
+    const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos);
+    const mesh = new THREE.Mesh(merged, getMat(parts[0].color, parts[0].emissive));
     group.add(mesh);
   }
 
@@ -162,8 +185,6 @@ export default function CityCanvas() {
     scene.add(gridHelper);
 
     // ── buildings — 5×5 grid (25 buildings) ──
-    const palettes = ['cyberpunk', 'brutalist', 'glass'] as const;
-    const windowStyles = ['regular', 'wide', 'narrow'] as const;
     const GRID = 5;
 
     const buildingSpecs: BuildingSpec[] = [];
