@@ -52,14 +52,65 @@ export function generateBuilding(
 
   const parts: Part[] = [];
 
-  // body
+  // body — ponytail: 70% dark, 30% alt dark for color variation
+  const bodyColor = rng() > 0.3 ? palette[0] : palette[2];
   parts.push({
     type: 'box',
     position: [0, height / 2, 0],
     rotation: [0, 0, 0],
     scale: [width, height, depth],
-    color: palette[0],
+    color: bodyColor,
   });
+
+  // stepped top — ponytail: extra smaller box on top for silhouette variety
+  const hasStep = floors >= 8 && rng() < 0.35;
+  let stepH = 0;
+  if (hasStep) {
+    const stepFloors = Math.floor(lerp(1, 3, rng()));
+    stepH = stepFloors * floorHeight;
+    const stepW = width * lerp(0.45, 0.7, rng());
+    const stepD = depth * lerp(0.45, 0.7, rng());
+    parts.push({
+      type: 'box',
+      position: [0, height + stepH / 2, 0],
+      rotation: [0, 0, 0],
+      scale: [stepW, stepH, stepD],
+      color: palette[0],
+    });
+    // tiny windows on the step
+    const stepFrontZ = stepD / 2 + 0.05;
+    const sCols = Math.max(1, Math.floor(stepW / (windowW * 2)));
+    const sRows = Math.max(1, stepFloors);
+    const sStepX = stepW * 0.7 / sCols;
+    const sStepY = stepH / sRows;
+    const sStartX = -(stepW * 0.7) / 2 + sStepX / 2;
+    const sStartY = stepH - stepH / sRows / 2;
+    for (let r = 0; r < sRows; r++) {
+      for (let c = 0; c < sCols; c++) {
+        const lit = rng() > 0.35;
+        parts.push({
+          type: 'plane',
+          position: [sStartX + c * sStepX, sStartY - r * sStepY, stepFrontZ],
+          rotation: [0, 0, 0],
+          scale: [windowW * 0.6, windowW * 0.8, 1],
+          color: lit ? palette[1] : '#111111',
+          emissive: lit ? palette[1] : undefined,
+        });
+      }
+    }
+    // neon trim on step edge — ponytail: instant cyberpunk feel, 4 thin planes
+    const trimColor = palette[4];
+    const trimThick = 0.03;
+    const trimLen = stepW + 0.02;
+    parts.push({
+      type: 'plane',
+      position: [0, height + stepH, stepD / 2 + 0.02],
+      rotation: [0, 0, 0],
+      scale: [trimLen, trimThick, 1],
+      color: trimColor,
+      emissive: trimColor,
+    });
+  }
 
   // door — centered on front face at ground level, human-scale (fixed ~0.6 units)
   const doorW = width * 0.25;
@@ -117,6 +168,7 @@ export function generateBuilding(
   }
 
   // LED sign — on the upper part of the building, above windows
+  // ponytail: when stepped, sign sits below the step — layered look
   if (rng() < signProb) {
     const signW = width * 0.6;
     const signH = floorHeight * 0.6;
