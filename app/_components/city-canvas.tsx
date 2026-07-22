@@ -34,7 +34,8 @@ function getMat(color: string, emissive?: string): THREE.MeshStandardMaterial {
 
 // ── pony tail: helpers for matrix ops ──
 const _dummy = new THREE.Object3D();
-const _vec = new THREE.Vector3();
+const _pos = new THREE.Vector3();
+const _scl = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
 const _euler = new THREE.Euler();
 
@@ -50,9 +51,9 @@ function bakeTransform(geo: THREE.BufferGeometry, part: Part): THREE.BufferGeome
   const cloned = geo.clone();
   cloned.applyMatrix4(
     new THREE.Matrix4().compose(
-      _vec.set(...part.position),
+      _pos.set(...part.position),
       _quat.setFromEuler(_euler.set(...part.rotation)),
-      _vec.set(...part.scale),
+      _scl.set(...part.scale),
     ),
   );
   return cloned;
