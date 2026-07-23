@@ -134,7 +134,7 @@ const SIDEWALK_WIDTH = 1.5;
 const HALF_ROAD = ROAD_WIDTH / 2;
 const SIDEWALK_EDGE = HALF_ROAD + SIDEWALK_WIDTH; // 5.5 — curb-to-building setback
 const BUILDINGS_PER_SIDE = 12;
-const AVENUE_SEPARATION = 30; // distance between avenue centerlines
+const AVENUE_SEPARATION = 18; // distance between avenue centerlines
 
 export default function CityCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
