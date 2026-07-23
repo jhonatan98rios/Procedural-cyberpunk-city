@@ -134,6 +134,7 @@ const SIDEWALK_WIDTH = 1.5;
 const HALF_ROAD = ROAD_WIDTH / 2;
 const SIDEWALK_EDGE = HALF_ROAD + SIDEWALK_WIDTH; // 5.5 — curb-to-building setback
 const BUILDINGS_PER_SIDE = 12;
+const AVENUE_SEPARATION = 30; // distance between avenue centerlines
 
 export default function CityCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -158,11 +159,11 @@ export default function CityCanvas() {
     scene.background = new THREE.Color('#110022');
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 1, 300);
-    camera.position.set(25, 18, 30);
-    camera.lookAt(0, 5, 0);
+    camera.position.set(25, 22, 45);
+    camera.lookAt(0, 5, -AVENUE_SEPARATION / 2);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 5, 0);
+    controls.target.set(0, 5, -AVENUE_SEPARATION / 2);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 8;
@@ -183,17 +184,17 @@ export default function CityCanvas() {
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.left = -50;
     sun.shadow.camera.right = 50;
-    sun.shadow.camera.top = 30;
-    sun.shadow.camera.bottom = -20;
+    sun.shadow.camera.top = 50;
+    sun.shadow.camera.bottom = -50;
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 120;
     sun.shadow.bias = -0.0001;
     sun.shadow.normalBias = 0.02;
     scene.add(sun);
 
-    // ground — extends past avenue to hide horizon gaps
+    // ground — covers both avenues + cross streets
     const avenueLength = (BUILDINGS_PER_SIDE - 1) * BUILDING_SPACING;
-    const groundSize = avenueLength + 40;
+    const groundSize = Math.max(avenueLength + 40, AVENUE_SEPARATION + 40);
     const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat = new THREE.MeshStandardMaterial({
       color: '#0a0a14',
@@ -204,80 +205,114 @@ export default function CityCanvas() {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // asphalt — dark gray strip along X
-    const roadLength = avenueLength + BUILDING_SPACING * 2;
-    const roadGeo = new THREE.PlaneGeometry(roadLength, ROAD_WIDTH);
+    // shared materials
     const roadMat = new THREE.MeshStandardMaterial({
       color: '#2a2a2c',
       roughness: 0.85,
       metalness: 0.05,
     });
-    const road = new THREE.Mesh(roadGeo, roadMat);
-    road.rotation.x = -Math.PI / 2;
-    road.position.y = 0.005;
-    road.receiveShadow = true;
-    scene.add(road);
-
-    // sidewalks — light gray strips on both sides of the road
-    const sidewalkGeo = new THREE.PlaneGeometry(roadLength, SIDEWALK_WIDTH);
-    const sidewalkMat = new THREE.MeshStandardMaterial({
+    const sidewalkMatShared = new THREE.MeshStandardMaterial({
       color: '#7a7a7e',
       roughness: 0.7,
       metalness: 0.1,
     });
 
-    const southSidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMat);
-    southSidewalk.rotation.x = -Math.PI / 2;
-    southSidewalk.position.set(0, 0.003, -(HALF_ROAD + SIDEWALK_WIDTH / 2));
-    southSidewalk.receiveShadow = true;
-    scene.add(southSidewalk);
-
-    const northSidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMat);
-    northSidewalk.rotation.x = -Math.PI / 2;
-    northSidewalk.position.set(0, 0.003, HALF_ROAD + SIDEWALK_WIDTH / 2);
-    northSidewalk.receiveShadow = true;
-    scene.add(northSidewalk);
-
-    // ── buildings — single avenue, both sides facing the road ──
-    const buildingSpecs: BuildingSpec[] = [];
-    for (let i = 0; i < BUILDINGS_PER_SIDE * 2; i++) {
-      buildingSpecs.push({ params: {}, seed: i });
-    }
-
-    const buildings = generateBuildings(buildingSpecs);
+    const roadLength = avenueLength + BUILDING_SPACING * 2;
     const startX = -avenueLength / 2;
 
-    // south side (Z-): buildings naturally face Z+ toward the road
-    for (let i = 0; i < BUILDINGS_PER_SIDE; i++) {
-      const building = buildings[i];
-      const depth = building.parts[0].scale[2]; // body's Z extent
-      const group = createGroup(building);
-      group.position.x = startX + i * BUILDING_SPACING;
-      group.position.z = -(SIDEWALK_EDGE + depth / 2);
+    // ponytail: shadow helper
+    const setShadows = (group: THREE.Group) => {
       group.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.castShadow = true;
           child.receiveShadow = true;
         }
       });
-      scene.add(group);
+    };
+
+    // ── generate all buildings (2 avenues × 24 per avenue = 48) ──
+    const AVENUE_Z = [0, -AVENUE_SEPARATION];
+    const buildingSpecs: BuildingSpec[] = [];
+    for (let i = 0; i < BUILDINGS_PER_SIDE * 2 * AVENUE_Z.length; i++) {
+      buildingSpecs.push({ params: {}, seed: i });
+    }
+    const allBuildings = generateBuildings(buildingSpecs);
+    let bIdx = 0;
+
+    for (const zCenter of AVENUE_Z) {
+      // asphalt
+      const roadGeo = new THREE.PlaneGeometry(roadLength, ROAD_WIDTH);
+      const road = new THREE.Mesh(roadGeo, roadMat);
+      road.rotation.x = -Math.PI / 2;
+      road.position.set(0, 0.005, zCenter);
+      road.receiveShadow = true;
+      scene.add(road);
+
+      // sidewalks both sides
+      const sidewalkGeo = new THREE.PlaneGeometry(roadLength, SIDEWALK_WIDTH);
+      for (const side of [-1, 1]) {
+        const sw = new THREE.Mesh(sidewalkGeo, sidewalkMatShared);
+        sw.rotation.x = -Math.PI / 2;
+        sw.position.set(0, 0.003, zCenter + side * (HALF_ROAD + SIDEWALK_WIDTH / 2));
+        sw.receiveShadow = true;
+        scene.add(sw);
+      }
+
+      // south side buildings (face Z+ toward road)
+      for (let i = 0; i < BUILDINGS_PER_SIDE; i++) {
+        const building = allBuildings[bIdx++];
+        const depth = building.parts[0].scale[2];
+        const group = createGroup(building);
+        group.position.x = startX + i * BUILDING_SPACING;
+        group.position.z = zCenter - (SIDEWALK_EDGE + depth / 2);
+        setShadows(group);
+        scene.add(group);
+      }
+
+      // north side buildings (face Z- toward road, rotated 180°)
+      for (let i = 0; i < BUILDINGS_PER_SIDE; i++) {
+        const building = allBuildings[bIdx++];
+        const depth = building.parts[0].scale[2];
+        const group = createGroup(building);
+        group.position.x = startX + i * BUILDING_SPACING;
+        group.position.z = zCenter + (SIDEWALK_EDGE + depth / 2);
+        group.rotation.y = Math.PI;
+        setShadows(group);
+        scene.add(group);
+      }
     }
 
-    // north side (Z+): rotate 180° so buildings face Z- toward the road
-    for (let i = 0; i < BUILDINGS_PER_SIDE; i++) {
-      const building = buildings[BUILDINGS_PER_SIDE + i];
-      const depth = building.parts[0].scale[2];
-      const group = createGroup(building);
-      group.position.x = startX + i * BUILDING_SPACING;
-      group.position.z = SIDEWALK_EDGE + depth / 2;
-      group.rotation.y = Math.PI;
-      group.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-      });
-      scene.add(group);
+    // ── three perpendicular cross streets (wide, two-way) ──
+    // connect avenue 1 south curb to avenue 2 north curb
+    const crossZ0 = AVENUE_Z[0] - HALF_ROAD; // -4
+    const crossZ1 = AVENUE_Z[1] + HALF_ROAD; // -26
+    const crossLength = Math.abs(crossZ1 - crossZ0);
+    const crossMidZ = (crossZ0 + crossZ1) / 2;
+    const crossPositions = [startX, 0, startX + avenueLength];
+
+    const crossRoadGeo = new THREE.PlaneGeometry(ROAD_WIDTH, crossLength);
+    const crossSidewalkGeo = new THREE.PlaneGeometry(SIDEWALK_WIDTH, crossLength);
+
+    for (const cx of crossPositions) {
+      // cross asphalt (y=0.004 — slightly below avenues to avoid z-fighting)
+      const cr = new THREE.Mesh(crossRoadGeo, roadMat);
+      cr.rotation.x = -Math.PI / 2;
+      cr.position.set(cx, 0.004, crossMidZ);
+      cr.receiveShadow = true;
+      scene.add(cr);
+
+      // cross sidewalks (both sides in X)
+      for (const side of [-1, 1]) {
+        const csw = new THREE.Mesh(crossSidewalkGeo, sidewalkMatShared);
+        csw.rotation.x = -Math.PI / 2;
+        csw.position.set(
+          cx + side * (HALF_ROAD + SIDEWALK_WIDTH / 2),
+          0.003,
+          crossMidZ,
+        );
+        csw.receiveShadow = true;
+        scene.add(csw);
+      }
     }
 
     function animate() {
