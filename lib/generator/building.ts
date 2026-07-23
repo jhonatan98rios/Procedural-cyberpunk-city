@@ -112,6 +112,88 @@ export function generateBuilding(
     });
   }
 
+  // roof props — ponytail: antennas, water tanks, AC units on the roof
+  if (floors >= 6) {
+    const roofY = height;
+    const halfW = width / 2 - 0.15;
+    const halfD = depth / 2 - 0.15;
+
+    // antenna — thin pole + emissive tip
+    if (rng() < 0.35) {
+      const ax = lerp(-halfW, halfW, rng());
+      const az = lerp(-halfD, halfD, rng());
+      const poleH = lerp(0.8, 2.0, rng());
+      parts.push({
+        type: 'cylinder',
+        position: [ax, roofY + poleH / 2, az],
+        rotation: [0, 0, 0],
+        scale: [0.04, poleH, 0.04],
+        color: '#333344',
+      });
+      parts.push({
+        type: 'box',
+        position: [ax, roofY + poleH, az],
+        rotation: [0, 0, 0],
+        scale: [0.07, 0.07, 0.07],
+        color: palette[4],
+        emissive: palette[4],
+      });
+    }
+
+    // water tank — short wide cylinder
+    if (rng() < 0.25) {
+      const tx = lerp(-halfW, halfW, rng());
+      const tz = lerp(-halfD, halfD, rng());
+      const tankR = lerp(0.2, 0.4, rng());
+      const tankH = lerp(0.3, 0.7, rng());
+      parts.push({
+        type: 'cylinder',
+        position: [tx, roofY + tankH / 2, tz],
+        rotation: [0, 0, 0],
+        scale: [tankR, tankH, tankR],
+        color: '#2a2a3a',
+      });
+    }
+
+    // AC condenser cluster — 2-4 small boxes
+    if (rng() < 0.25) {
+      const cx = lerp(-halfW, halfW, rng());
+      const cz = lerp(-halfD, halfD, rng());
+      const acCount = Math.floor(lerp(2, 4, rng()));
+      for (let i = 0; i < acCount; i++) {
+        parts.push({
+          type: 'box',
+          position: [cx + (i - acCount / 2 + 0.5) * 0.2, roofY + 0.1, cz],
+          rotation: [0, 0, 0],
+          scale: [0.2, 0.2, 0.15],
+          color: '#3a3a4a',
+        });
+      }
+    }
+  }
+
+  // neon corner trim — ponytail: 4 emissive planes at building corners
+  const trimW = 0.04;
+  const hw = width / 2;
+  const hd = depth / 2;
+  const corners: [number, number, number][] = [
+    [hw, 0, hd],
+    [-hw, 0, hd],
+    [hw, 0, -hd],
+    [-hw, 0, -hd],
+  ];
+  const trimRots = [Math.PI / 4, -Math.PI / 4, Math.PI * 3 / 4, -Math.PI * 3 / 4];
+  for (let i = 0; i < 4; i++) {
+    parts.push({
+      type: 'plane',
+      position: [corners[i][0], height / 2, corners[i][2]],
+      rotation: [0, trimRots[i], 0],
+      scale: [trimW, height, 1],
+      color: palette[4],
+      emissive: palette[4],
+    });
+  }
+
   // door — centered on front face at ground level, human-scale (fixed ~0.6 units)
   const doorW = width * 0.25;
   const doorH = 0.6;
