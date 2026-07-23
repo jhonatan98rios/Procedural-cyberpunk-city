@@ -129,6 +129,11 @@ function generateBuildings(specs: BuildingSpec[]): Building[] {
 }
 
 const BUILDING_SPACING = 8;
+const ROAD_WIDTH = 8;
+const SIDEWALK_WIDTH = 1.5;
+const HALF_ROAD = ROAD_WIDTH / 2;
+const SIDEWALK_EDGE = HALF_ROAD + SIDEWALK_WIDTH; // 5.5 — curb-to-building setback
+const BUILDINGS_PER_SIDE = 12;
 
 export default function CityCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -151,8 +156,7 @@ export default function CityCanvas() {
     scene.background = new THREE.Color('#110022');
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 1, 300);
-    // ponytail: pull camera back for the 5×5 grid
-    camera.position.set(35, 25, 35);
+    camera.position.set(25, 18, 30);
     camera.lookAt(0, 5, 0);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -170,43 +174,78 @@ export default function CityCanvas() {
     const hemiLight = new THREE.HemisphereLight('#8899cc', '#221144', 0.7);
     scene.add(hemiLight);
 
-    // ground — scale up for the larger grid
-    const groundSize = BUILDING_SPACING * 8;
+    // ground — extends past avenue to hide horizon gaps
+    const avenueLength = (BUILDINGS_PER_SIDE - 1) * BUILDING_SPACING;
+    const groundSize = avenueLength + 40;
     const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: '#111122',
+      color: '#0a0a14',
       roughness: 0.9,
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    const gridHelper = new THREE.PolarGridHelper(groundSize * 0.45, 64, 32, 128);
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
+    // asphalt — dark gray strip along X
+    const roadLength = avenueLength + BUILDING_SPACING * 2;
+    const roadGeo = new THREE.PlaneGeometry(roadLength, ROAD_WIDTH);
+    const roadMat = new THREE.MeshStandardMaterial({
+      color: '#2a2a2c',
+      roughness: 0.85,
+      metalness: 0.05,
+    });
+    const road = new THREE.Mesh(roadGeo, roadMat);
+    road.rotation.x = -Math.PI / 2;
+    road.position.y = 0.005;
+    scene.add(road);
 
-    // ── buildings — 5×5 grid (25 buildings) ──
-    const GRID = 5;
+    // sidewalks — light gray strips on both sides of the road
+    const sidewalkGeo = new THREE.PlaneGeometry(roadLength, SIDEWALK_WIDTH);
+    const sidewalkMat = new THREE.MeshStandardMaterial({
+      color: '#7a7a7e',
+      roughness: 0.7,
+      metalness: 0.1,
+    });
 
+    const southSidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMat);
+    southSidewalk.rotation.x = -Math.PI / 2;
+    southSidewalk.position.set(0, 0.003, -(HALF_ROAD + SIDEWALK_WIDTH / 2));
+    scene.add(southSidewalk);
+
+    const northSidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMat);
+    northSidewalk.rotation.x = -Math.PI / 2;
+    northSidewalk.position.set(0, 0.003, HALF_ROAD + SIDEWALK_WIDTH / 2);
+    scene.add(northSidewalk);
+
+    // ── buildings — single avenue, both sides facing the road ──
     const buildingSpecs: BuildingSpec[] = [];
-    for (let row = 0; row < GRID; row++) {
-      for (let col = 0; col < GRID; col++) {
-        const seed = row * 100 + col;
-        // ponytail: use seed-driven rng inside generateBuilding, not Math.random here
-        buildingSpecs.push({ params: {}, seed });
-      }
+    for (let i = 0; i < BUILDINGS_PER_SIDE * 2; i++) {
+      buildingSpecs.push({ params: {}, seed: i });
     }
 
     const buildings = generateBuildings(buildingSpecs);
-    const offset = ((GRID - 1) * BUILDING_SPACING) / 2;
-    buildings.forEach((building, i) => {
-      const row = Math.floor(i / GRID);
-      const col = i % GRID;
+    const startX = -avenueLength / 2;
+
+    // south side (Z-): buildings naturally face Z+ toward the road
+    for (let i = 0; i < BUILDINGS_PER_SIDE; i++) {
+      const building = buildings[i];
+      const depth = building.parts[0].scale[2]; // body's Z extent
       const group = createGroup(building);
-      group.position.x = col * BUILDING_SPACING - offset;
-      group.position.z = row * BUILDING_SPACING - offset;
+      group.position.x = startX + i * BUILDING_SPACING;
+      group.position.z = -(SIDEWALK_EDGE + depth / 2);
       scene.add(group);
-    });
+    }
+
+    // north side (Z+): rotate 180° so buildings face Z- toward the road
+    for (let i = 0; i < BUILDINGS_PER_SIDE; i++) {
+      const building = buildings[BUILDINGS_PER_SIDE + i];
+      const depth = building.parts[0].scale[2];
+      const group = createGroup(building);
+      group.position.x = startX + i * BUILDING_SPACING;
+      group.position.z = SIDEWALK_EDGE + depth / 2;
+      group.rotation.y = Math.PI;
+      scene.add(group);
+    }
 
     function animate() {
       requestAnimationFrame(animate);
