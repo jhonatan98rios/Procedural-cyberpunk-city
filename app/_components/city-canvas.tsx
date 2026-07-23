@@ -128,7 +128,7 @@ function generateBuildings(specs: BuildingSpec[]): Building[] {
   return specs.map(({ params, seed }) => generateBuilding(params, seed));
 }
 
-const BUILDING_SPACING = 8;
+const BUILDING_SPACING = 5;
 const ROAD_WIDTH = 8;
 const SIDEWALK_WIDTH = 1.5;
 const HALF_ROAD = ROAD_WIDTH / 2;
