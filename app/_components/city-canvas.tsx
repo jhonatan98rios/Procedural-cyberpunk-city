@@ -239,6 +239,18 @@ export default function CityCanvas() {
     const allBuildings = generateBuildings(buildingSpecs);
     let bIdx = 0;
 
+    // cross street X positions — buildings must not overlap
+    const crossPositions = [startX, 0, startX + avenueLength];
+    const overlapsCrossStreet = (bx: number, buildingWidth: number) => {
+      const halfW = buildingWidth / 2;
+      for (const cx of crossPositions) {
+        if (bx + halfW > cx - SIDEWALK_EDGE && bx - halfW < cx + SIDEWALK_EDGE) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     for (const zCenter of AVENUE_Z) {
       // asphalt
       const roadGeo = new THREE.PlaneGeometry(roadLength, ROAD_WIDTH);
@@ -261,9 +273,11 @@ export default function CityCanvas() {
       // south side buildings (face Z+ toward road)
       for (let i = 0; i < BUILDINGS_PER_SIDE; i++) {
         const building = allBuildings[bIdx++];
+        const bx = startX + i * BUILDING_SPACING;
+        if (overlapsCrossStreet(bx, building.parts[0].scale[0])) continue;
         const depth = building.parts[0].scale[2];
         const group = createGroup(building);
-        group.position.x = startX + i * BUILDING_SPACING;
+        group.position.x = bx;
         group.position.z = zCenter - (SIDEWALK_EDGE + depth / 2);
         setShadows(group);
         scene.add(group);
@@ -272,9 +286,11 @@ export default function CityCanvas() {
       // north side buildings (face Z- toward road, rotated 180°)
       for (let i = 0; i < BUILDINGS_PER_SIDE; i++) {
         const building = allBuildings[bIdx++];
+        const bx = startX + i * BUILDING_SPACING;
+        if (overlapsCrossStreet(bx, building.parts[0].scale[0])) continue;
         const depth = building.parts[0].scale[2];
         const group = createGroup(building);
-        group.position.x = startX + i * BUILDING_SPACING;
+        group.position.x = bx;
         group.position.z = zCenter + (SIDEWALK_EDGE + depth / 2);
         group.rotation.y = Math.PI;
         setShadows(group);
@@ -288,7 +304,6 @@ export default function CityCanvas() {
     const crossZ1 = AVENUE_Z[1] + HALF_ROAD; // -26
     const crossLength = Math.abs(crossZ1 - crossZ0);
     const crossMidZ = (crossZ0 + crossZ1) / 2;
-    const crossPositions = [startX, 0, startX + avenueLength];
 
     const crossRoadGeo = new THREE.PlaneGeometry(ROAD_WIDTH, crossLength);
     const crossSidewalkGeo = new THREE.PlaneGeometry(SIDEWALK_WIDTH, crossLength);
