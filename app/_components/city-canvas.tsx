@@ -150,6 +150,8 @@ export default function CityCanvas() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -168,11 +170,26 @@ export default function CityCanvas() {
     controls.maxPolarAngle = Math.PI * 0.45;
     controls.update();
 
-    const ambient = new THREE.AmbientLight('#221144', 0.6);
+    const ambient = new THREE.AmbientLight('#443366', 1.2);
     scene.add(ambient);
 
-    const hemiLight = new THREE.HemisphereLight('#8899cc', '#221144', 0.7);
+    const hemiLight = new THREE.HemisphereLight('#aabbdd', '#332244', 0.8);
     scene.add(hemiLight);
+
+    // directional sun — soft shadows across the avenue
+    const sun = new THREE.DirectionalLight('#ffeebb', 1.5);
+    sun.position.set(40, 35, 20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -50;
+    sun.shadow.camera.right = 50;
+    sun.shadow.camera.top = 30;
+    sun.shadow.camera.bottom = -20;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 120;
+    sun.shadow.bias = -0.0001;
+    sun.shadow.normalBias = 0.02;
+    scene.add(sun);
 
     // ground — extends past avenue to hide horizon gaps
     const avenueLength = (BUILDINGS_PER_SIDE - 1) * BUILDING_SPACING;
@@ -184,6 +201,7 @@ export default function CityCanvas() {
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
     scene.add(ground);
 
     // asphalt — dark gray strip along X
@@ -197,6 +215,7 @@ export default function CityCanvas() {
     const road = new THREE.Mesh(roadGeo, roadMat);
     road.rotation.x = -Math.PI / 2;
     road.position.y = 0.005;
+    road.receiveShadow = true;
     scene.add(road);
 
     // sidewalks — light gray strips on both sides of the road
@@ -210,11 +229,13 @@ export default function CityCanvas() {
     const southSidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMat);
     southSidewalk.rotation.x = -Math.PI / 2;
     southSidewalk.position.set(0, 0.003, -(HALF_ROAD + SIDEWALK_WIDTH / 2));
+    southSidewalk.receiveShadow = true;
     scene.add(southSidewalk);
 
     const northSidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMat);
     northSidewalk.rotation.x = -Math.PI / 2;
     northSidewalk.position.set(0, 0.003, HALF_ROAD + SIDEWALK_WIDTH / 2);
+    northSidewalk.receiveShadow = true;
     scene.add(northSidewalk);
 
     // ── buildings — single avenue, both sides facing the road ──
@@ -233,6 +254,12 @@ export default function CityCanvas() {
       const group = createGroup(building);
       group.position.x = startX + i * BUILDING_SPACING;
       group.position.z = -(SIDEWALK_EDGE + depth / 2);
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
       scene.add(group);
     }
 
@@ -244,6 +271,12 @@ export default function CityCanvas() {
       group.position.x = startX + i * BUILDING_SPACING;
       group.position.z = SIDEWALK_EDGE + depth / 2;
       group.rotation.y = Math.PI;
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
       scene.add(group);
     }
 
