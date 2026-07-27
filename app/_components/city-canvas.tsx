@@ -32,6 +32,28 @@ function getMat(color: string, emissive?: string): THREE.MeshStandardMaterial {
   return mat;
 }
 
+// ── concrete wall texture — shared, tinted per-building via color ──
+const textureLoader = new THREE.TextureLoader();
+const concreteTex = textureLoader.load('/concrete.jpg');
+concreteTex.wrapS = THREE.RepeatWrapping;
+concreteTex.wrapT = THREE.RepeatWrapping;
+concreteTex.colorSpace = THREE.SRGBColorSpace;
+
+function getConcreteMat(color: string): THREE.MeshStandardMaterial {
+  const key = `concrete|${color}`;
+  let mat = matPool.get(key);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({
+      map: concreteTex,
+      color,
+      roughness: 0.85,
+      metalness: 0.05,
+    });
+    matPool.set(key, mat);
+  }
+  return mat;
+}
+
 // ── pony tail: helpers for matrix ops ──
 const _dummy = new THREE.Object3D();
 const _pos = new THREE.Vector3();
@@ -80,14 +102,26 @@ function createGroup(building: Building): THREE.Group {
     }
   }
 
-  // body parts — group by material, merge geometries per group into one mesh
-  const bodyByMat = new Map<string, Part[]>();
+  // body parts — boxes get concrete texture, cylinders get solid mat
+  const bodyBoxes = new Map<string, Part[]>();
+  const bodyProps = new Map<string, Part[]>();
   for (const part of bodyParts) {
     const key = `${part.color}|${part.emissive ?? ''}`;
-    if (!bodyByMat.has(key)) bodyByMat.set(key, []);
-    bodyByMat.get(key)!.push(part);
+    if (part.type === 'box') {
+      if (!bodyBoxes.has(key)) bodyBoxes.set(key, []);
+      bodyBoxes.get(key)!.push(part);
+    } else {
+      if (!bodyProps.has(key)) bodyProps.set(key, []);
+      bodyProps.get(key)!.push(part);
+    }
   }
-  for (const [key, parts] of bodyByMat) {
+  for (const [, parts] of bodyBoxes) {
+    const geos = parts.map((p) => bakeTransform(GEO.box, p));
+    const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos);
+    const mesh = new THREE.Mesh(merged, getConcreteMat(parts[0].color));
+    group.add(mesh);
+  }
+  for (const [, parts] of bodyProps) {
     const geos = parts.map((p) => bakeTransform(GEO[p.type], p));
     const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos);
     const mesh = new THREE.Mesh(merged, getMat(parts[0].color, parts[0].emissive));
