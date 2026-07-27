@@ -14,10 +14,13 @@ const BILLBOARD_WORDS = [
 ];
 
 const PALETTES: Record<string, string[]> = {
+  bladeRunner: ['#7a7a7e', '#ff2d95', '#555558', '#00e5ff', '#ff69b4'],
   cyberpunk: ['#1a1a2e', '#00ffff', '#0f3460', '#e94560', '#ff00ff'],
   brutalist: ['#4a4a4a', '#6b6b6b', '#2d2d2d', '#8a8a8a', '#1a1a1a'],
   glass: ['#1b2838', '#2a475e', '#c7d5e0', '#66c0f4', '#171a21'],
 };
+
+const TURQUOISE = '#00e5ff'; // ponytail: reuse for window variety, paired with palette[1] pink
 
 function pickPalette(
   palette: string | string[] | undefined,
@@ -25,8 +28,8 @@ function pickPalette(
 ): string[] {
   if (Array.isArray(palette)) return palette;
   const keys = Object.keys(PALETTES);
-  const key = palette ?? keys[Math.floor(rng() * keys.length)];
-  return PALETTES[key] ?? PALETTES.cyberpunk;
+  const key = palette ?? 'bladeRunner';
+  return PALETTES[key] ?? PALETTES.bladeRunner;
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -42,8 +45,8 @@ export function generateBuilding(
 
   const floors = params.floors ?? Math.floor(lerp(2, 20, rng()));
   const floorHeight = params.floorHeight ?? 1;
-  const width = params.width ?? lerp(1.5, 3, rng());
-  const depth = params.depth ?? lerp(1.5, 3, rng());
+  const width = params.width ?? lerp(2.5, 5, rng());
+  const depth = params.depth ?? lerp(2.5, 5, rng());
   const height = floors * floorHeight;
   const acProb = params.acProbability ?? 0.7;
   const signProb = params.signProbability ?? 0.3;
@@ -227,13 +230,15 @@ export function generateBuilding(
 
       const wy = startY + r * stepY;
       const lit = rng() > 0.3;
+      // ponytail: alternate pink/turquoise windows for blade-runner neon variety
+      const winColor = rng() > 0.5 ? palette[1] : TURQUOISE;
       parts.push({
         type: 'plane',
         position: [wx, wy, frontZ],
         rotation: [0, 0, 0],
         scale: [windowW, windowW * 1.3, 1],
-        color: lit ? palette[1] : '#111111',
-        emissive: lit ? palette[1] : undefined,
+        color: lit ? winColor : '#111111',
+        emissive: lit ? winColor : undefined,
       });
 
       // AC unit below window

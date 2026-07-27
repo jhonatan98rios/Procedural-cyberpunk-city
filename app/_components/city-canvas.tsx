@@ -128,7 +128,7 @@ function generateBuildings(specs: BuildingSpec[]): Building[] {
   return specs.map(({ params, seed }) => generateBuilding(params, seed));
 }
 
-const BUILDING_SPACING = 5;
+const BUILDING_SPACING = 4;
 const ROAD_WIDTH = 8;
 const SIDEWALK_WIDTH = 1.5;
 const HALF_ROAD = ROAD_WIDTH / 2;
@@ -156,7 +156,8 @@ export default function CityCanvas() {
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#110022');
+    scene.background = new THREE.Color('#c0c5ca');
+    scene.fog = new THREE.Fog('#c0c5ca', 25, 100);
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 1, 300);
     camera.position.set(25, 22, 45);
@@ -171,14 +172,14 @@ export default function CityCanvas() {
     controls.maxPolarAngle = Math.PI * 0.45;
     controls.update();
 
-    const ambient = new THREE.AmbientLight('#443366', 1.2);
+    const ambient = new THREE.AmbientLight('#8899aa', 2.0);
     scene.add(ambient);
 
-    const hemiLight = new THREE.HemisphereLight('#aabbdd', '#332244', 0.8);
+    const hemiLight = new THREE.HemisphereLight('#ccddee', '#445566', 1.0);
     scene.add(hemiLight);
 
-    // directional sun — soft shadows across the avenue
-    const sun = new THREE.DirectionalLight('#ffeebb', 1.5);
+    // directional sun — weak, diffuse overcast (nuclear winter)
+    const sun = new THREE.DirectionalLight('#ddeeff', 0.6);
     sun.position.set(40, 35, 20);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -197,8 +198,8 @@ export default function CityCanvas() {
     const groundSize = Math.max(avenueLength + 40, AVENUE_SEPARATION + 40);
     const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: '#0a0a14',
-      roughness: 0.9,
+      color: '#1a1a1e',
+      roughness: 0.95,
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
@@ -207,13 +208,13 @@ export default function CityCanvas() {
 
     // shared materials
     const roadMat = new THREE.MeshStandardMaterial({
-      color: '#2a2a2c',
-      roughness: 0.85,
+      color: '#2e2e30',
+      roughness: 0.9,
       metalness: 0.05,
     });
     const sidewalkMatShared = new THREE.MeshStandardMaterial({
-      color: '#7a7a7e',
-      roughness: 0.7,
+      color: '#6e6e72',
+      roughness: 0.75,
       metalness: 0.1,
     });
 
@@ -328,6 +329,36 @@ export default function CityCanvas() {
         csw.receiveShadow = true;
         scene.add(csw);
       }
+    }
+
+    // ── manhole smoke — white semi-transparent puffs scattered on roads ──
+    const smokeMat = new THREE.MeshStandardMaterial({
+      color: '#e8e8ec',
+      roughness: 1,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.25,
+      depthWrite: false,
+    });
+    const smokeGeo = new THREE.CylinderGeometry(0.5, 0.7, 0.3, 8);
+    // ponytail: reuse same geo+mat, just scatter instances
+    const smokePositions: [number, number, number][] = [];
+    // intersection manholes + random road positions
+    for (const zCenter of AVENUE_Z) {
+      for (const cx of crossPositions) {
+        smokePositions.push([cx, 0.15, zCenter]);
+      }
+      // extra smoke along each avenue
+      for (let s = 0; s < 8; s++) {
+        const sx = startX + (s + 1) * (avenueLength / 9);
+        smokePositions.push([sx, 0.15, zCenter + (Math.random() - 0.5) * ROAD_WIDTH * 0.6]);
+      }
+    }
+    for (const [sx, sy, sz] of smokePositions) {
+      const smoke = new THREE.Mesh(smokeGeo, smokeMat);
+      smoke.position.set(sx, sy, sz);
+      smoke.renderOrder = 999;
+      scene.add(smoke);
     }
 
     function animate() {
