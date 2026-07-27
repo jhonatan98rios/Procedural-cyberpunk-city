@@ -371,36 +371,6 @@ export default function CityCanvas() {
       }
     }
 
-    // ── manhole smoke — white semi-transparent puffs scattered on roads ──
-    const smokeMat = new THREE.MeshStandardMaterial({
-      color: '#e8e8ec',
-      roughness: 1,
-      metalness: 0,
-      transparent: true,
-      opacity: 0.25,
-      depthWrite: false,
-    });
-    const smokeGeo = new THREE.CylinderGeometry(0.5, 0.7, 0.3, 8);
-    // ponytail: reuse same geo+mat, just scatter instances
-    const smokePositions: [number, number, number][] = [];
-    // intersection manholes + random road positions
-    for (const zCenter of AVENUE_Z) {
-      for (const cx of crossPositions) {
-        smokePositions.push([cx, 0.15, zCenter]);
-      }
-      // extra smoke along each avenue
-      for (let s = 0; s < 8; s++) {
-        const sx = startX + (s + 1) * (avenueLength / 9);
-        smokePositions.push([sx, 0.15, zCenter + (Math.random() - 0.5) * ROAD_WIDTH * 0.6]);
-      }
-    }
-    for (const [sx, sy, sz] of smokePositions) {
-      const smoke = new THREE.Mesh(smokeGeo, smokeMat);
-      smoke.position.set(sx, sy, sz);
-      smoke.renderOrder = 999;
-      scene.add(smoke);
-    }
-
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
