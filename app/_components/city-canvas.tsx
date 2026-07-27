@@ -45,46 +45,6 @@ function ensureConcreteTex(): THREE.Texture {
   return concreteTex;
 }
 
-// scale BoxGeometry UVs per-face so texture tiles instead of stretching.
-// Three.js BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z
-function scaleBoxUVs(geo: THREE.BufferGeometry, [sx, sy, sz]: [number, number, number]) {
-  const uv = geo.getAttribute('uv');
-  if (!uv) return;
-  const arr = uv.array as Float32Array;
-  // [uScale, vScale] per face
-  const fs: [number, number][] = [
-    [sz, sy], // +X: depth × height
-    [sz, sy], // -X
-    [sx, sz], // +Y: width × depth
-    [sx, sz], // -Y
-    [sx, sy], // +Z: width × height
-    [sx, sy], // -Z
-  ];
-  for (let f = 0; f < 6; f++) {
-    const [su, sv] = fs[f];
-    for (let v = 0; v < 4; v++) {
-      const i = (f * 4 + v) * 2;
-      arr[i] *= su;
-      arr[i + 1] *= sv;
-    }
-  }
-  uv.needsUpdate = true;
-}
-
-// clone + scale UVs + bake transform (for box parts with concrete texture)
-function bakeBoxTransform(part: Part): THREE.BufferGeometry {
-  const geo = GEO.box.clone();
-  scaleBoxUVs(geo, part.scale);
-  geo.applyMatrix4(
-    new THREE.Matrix4().compose(
-      _pos.set(...part.position),
-      _quat.setFromEuler(_euler.set(...part.rotation)),
-      _scl.set(...part.scale),
-    ),
-  );
-  return geo;
-}
-
 function getConcreteMat(color: string): THREE.MeshStandardMaterial {
   const key = `concrete|${color}`;
   let mat = matPool.get(key);
@@ -162,7 +122,7 @@ function createGroup(building: Building): THREE.Group {
     }
   }
   for (const [, parts] of bodyBoxes) {
-    const geos = parts.map((p) => bakeBoxTransform(p));
+    const geos = parts.map((p) => bakeTransform(GEO.box, p));
     const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos);
     const mesh = new THREE.Mesh(merged, getConcreteMat(parts[0].color));
     group.add(mesh);
