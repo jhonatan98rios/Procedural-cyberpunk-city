@@ -32,19 +32,25 @@ function getMat(color: string, emissive?: string): THREE.MeshStandardMaterial {
   return mat;
 }
 
-// ── concrete wall texture — shared, tinted per-building via color ──
-const textureLoader = new THREE.TextureLoader();
-const concreteTex = textureLoader.load('/concrete.jpg');
-concreteTex.wrapS = THREE.RepeatWrapping;
-concreteTex.wrapT = THREE.RepeatWrapping;
-concreteTex.colorSpace = THREE.SRGBColorSpace;
+// ── concrete wall texture — lazy-init, only on client (SSR-safe) ──
+let concreteTex: THREE.Texture | null = null;
+function ensureConcreteTex(): THREE.Texture {
+  if (!concreteTex) {
+    const loader = new THREE.TextureLoader();
+    concreteTex = loader.load('/concrete.jpg');
+    concreteTex.wrapS = THREE.RepeatWrapping;
+    concreteTex.wrapT = THREE.RepeatWrapping;
+    concreteTex.colorSpace = THREE.SRGBColorSpace;
+  }
+  return concreteTex;
+}
 
 function getConcreteMat(color: string): THREE.MeshStandardMaterial {
   const key = `concrete|${color}`;
   let mat = matPool.get(key);
   if (!mat) {
     mat = new THREE.MeshStandardMaterial({
-      map: concreteTex,
+      map: ensureConcreteTex(),
       color,
       roughness: 0.85,
       metalness: 0.05,
