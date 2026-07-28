@@ -175,6 +175,7 @@ const HALF_ROAD = ROAD_WIDTH / 2;
 const SIDEWALK_EDGE = HALF_ROAD + SIDEWALK_WIDTH; // 5.5 — curb-to-building setback
 const BUILDINGS_PER_SIDE = 12;
 const AVENUE_SEPARATION = 18; // distance between avenue centerlines
+const BUILDINGS_LATERAL = 12; // ponytail: outer lateral rows, continuous (no cross streets)
 
 export default function CityCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -197,14 +198,14 @@ export default function CityCanvas() {
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#c0c5ca');
-    scene.fog = new THREE.Fog('#c0c5ca', 25, 100);
+    scene.fog = new THREE.Fog('#c0c5ca', 40, 160);
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 1, 300);
-    camera.position.set(25, 22, 45);
-    camera.lookAt(0, 5, -AVENUE_SEPARATION / 2);
+    camera.position.set(25, 22, 60);
+    camera.lookAt(0, 5, -AVENUE_SEPARATION);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 5, -AVENUE_SEPARATION / 2);
+    controls.target.set(0, 5, -AVENUE_SEPARATION);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 8;
@@ -233,9 +234,10 @@ export default function CityCanvas() {
     sun.shadow.normalBias = 0.02;
     scene.add(sun);
 
-    // ground — covers both avenues + cross streets
+    // ground — covers all avenues + cross streets + lateral rows
     const avenueLength = (BUILDINGS_PER_SIDE - 1) * BUILDING_SPACING;
-    const groundSize = Math.max(avenueLength + 40, AVENUE_SEPARATION + 40);
+    const cityDepth = 2 * AVENUE_SEPARATION + SIDEWALK_EDGE * 4;
+    const groundSize = Math.max(avenueLength + 50, cityDepth + 20);
     const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat = new THREE.MeshStandardMaterial({
       color: '#1a1a1e',
@@ -271,10 +273,11 @@ export default function CityCanvas() {
       });
     };
 
-    // ── generate all buildings (2 avenues × 24 per avenue = 48) ──
-    const AVENUE_Z = [0, -AVENUE_SEPARATION];
+    // ── generate all buildings (3 avenues × 24 + 2 lateral rows × 12 = 96) ──
+    const AVENUE_Z = [0, -AVENUE_SEPARATION, -2 * AVENUE_SEPARATION];
+    const totalBuildings = BUILDINGS_PER_SIDE * 2 * AVENUE_Z.length + BUILDINGS_LATERAL * 2;
     const buildingSpecs: BuildingSpec[] = [];
-    for (let i = 0; i < BUILDINGS_PER_SIDE * 2 * AVENUE_Z.length; i++) {
+    for (let i = 0; i < totalBuildings; i++) {
       buildingSpecs.push({ params: {}, seed: i });
     }
     const allBuildings = generateBuildings(buildingSpecs);
@@ -340,9 +343,9 @@ export default function CityCanvas() {
     }
 
     // ── three perpendicular cross streets (wide, two-way) ──
-    // connect avenue 1 south curb to avenue 2 north curb
+    // connect first avenue south curb to last avenue north curb
     const crossZ0 = AVENUE_Z[0] - HALF_ROAD; // -4
-    const crossZ1 = AVENUE_Z[1] + HALF_ROAD; // -26
+    const crossZ1 = AVENUE_Z[2] + HALF_ROAD; // -40
     const crossLength = Math.abs(crossZ1 - crossZ0);
     const crossMidZ = (crossZ0 + crossZ1) / 2;
 
@@ -369,6 +372,33 @@ export default function CityCanvas() {
         csw.receiveShadow = true;
         scene.add(csw);
       }
+    }
+
+    // ── lateral building rows (continuous, no cross streets) ──
+    // North side of avenue 0 — faces outward (+Z)
+    for (let i = 0; i < BUILDINGS_LATERAL; i++) {
+      const building = allBuildings[bIdx++];
+      const bx = startX + i * BUILDING_SPACING;
+      const depth = building.parts[0].scale[2];
+      const group = createGroup(building);
+      group.position.x = bx;
+      group.position.z = AVENUE_Z[0] + SIDEWALK_EDGE + depth / 2;
+      group.rotation.y = Math.PI;
+      setShadows(group);
+      scene.add(group);
+    }
+
+    // South side of last avenue — faces outward (-Z)
+    for (let i = 0; i < BUILDINGS_LATERAL; i++) {
+      const building = allBuildings[bIdx++];
+      const bx = startX + i * BUILDING_SPACING;
+      const depth = building.parts[0].scale[2];
+      const group = createGroup(building);
+      group.position.x = bx;
+      group.position.z = AVENUE_Z[2] - SIDEWALK_EDGE - depth / 2;
+      group.rotation.y = 0;
+      setShadows(group);
+      scene.add(group);
     }
 
     function animate() {

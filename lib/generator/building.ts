@@ -45,8 +45,9 @@ export function generateBuilding(
 
   const floors = params.floors ?? Math.floor(lerp(2, 20, rng()));
   const floorHeight = params.floorHeight ?? 1;
-  const width = params.width ?? lerp(2.5, 5, rng());
-  const depth = params.depth ?? lerp(2.5, 5, rng());
+  // ponytail: ~5% narrower to prevent overlap at street corners
+  const width = params.width ?? lerp(2.375, 4.75, rng());
+  const depth = params.depth ?? lerp(2.375, 4.75, rng());
   const height = floors * floorHeight;
   const acProb = params.acProbability ?? 0.7;
   const signProb = params.signProbability ?? 0.3;
