@@ -236,8 +236,8 @@ export default function CityCanvas() {
 
     // ground — covers all avenues + cross streets + lateral rows
     const avenueLength = (BUILDINGS_PER_SIDE - 1) * BUILDING_SPACING;
-    const cityDepth = 2 * AVENUE_SEPARATION + SIDEWALK_EDGE * 4;
-    const groundSize = Math.max(avenueLength + 50, cityDepth + 20);
+    const cityDepth = 2 * AVENUE_SEPARATION + SIDEWALK_EDGE * 4 + BUILDING_SPACING * 2;
+    const groundSize = Math.max(avenueLength + 50, cityDepth + 30);
     const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat = new THREE.MeshStandardMaterial({
       color: '#1a1a1e',
@@ -375,27 +375,30 @@ export default function CityCanvas() {
     }
 
     // ── lateral building rows (continuous, no cross streets) ──
-    // North side of avenue 0 — faces outward (+Z)
+    // Back-to-back with avenue buildings, separated by an alley (BUILDING_SPACING)
+    // North of avenue 0 outer side — faces outward (+Z)
+    const lateralNorthZ = AVENUE_Z[0] + SIDEWALK_EDGE + BUILDING_SPACING;
     for (let i = 0; i < BUILDINGS_LATERAL; i++) {
       const building = allBuildings[bIdx++];
       const bx = startX + i * BUILDING_SPACING;
       const depth = building.parts[0].scale[2];
       const group = createGroup(building);
       group.position.x = bx;
-      group.position.z = AVENUE_Z[0] + SIDEWALK_EDGE + depth / 2;
+      group.position.z = lateralNorthZ + depth / 2;
       group.rotation.y = Math.PI;
       setShadows(group);
       scene.add(group);
     }
 
-    // South side of last avenue — faces outward (-Z)
+    // South of last avenue outer side — faces outward (-Z)
+    const lateralSouthZ = AVENUE_Z[2] - SIDEWALK_EDGE - BUILDING_SPACING;
     for (let i = 0; i < BUILDINGS_LATERAL; i++) {
       const building = allBuildings[bIdx++];
       const bx = startX + i * BUILDING_SPACING;
       const depth = building.parts[0].scale[2];
       const group = createGroup(building);
       group.position.x = bx;
-      group.position.z = AVENUE_Z[2] - SIDEWALK_EDGE - depth / 2;
+      group.position.z = lateralSouthZ - depth / 2;
       group.rotation.y = 0;
       setShadows(group);
       scene.add(group);
