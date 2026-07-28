@@ -192,6 +192,15 @@ export default function CityCanvas() {
   const pointerDelta = useRef({ x: 0, y: 0 });
   const SENSITIVITY = 0.003;
 
+  // virtual joystick state
+  const joystickRef = useRef<HTMLDivElement>(null);
+  const knobRef = useRef<HTMLDivElement>(null);
+  const joystickActive = useRef(false);
+  const joystickCenter = useRef({ x: 0, y: 0 });
+  const moveInput = useRef({ x: 0, y: 0 });
+  const JOYSTICK_RADIUS = 55;
+  const MOVE_SPEED = 6;
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -233,6 +242,8 @@ export default function CityCanvas() {
     fpsPitch.current = 0;
     fpsCam.rotation.order = 'YXZ';
     fpsCam.rotation.set(0, 0, 0); // looks down -Z, along first avenue
+
+    let lastTime = performance.now();
 
     const ambient = new THREE.AmbientLight('#8899aa', 2.0);
     scene.add(ambient);
@@ -439,6 +450,25 @@ export default function CityCanvas() {
         pointerDelta.current.x = 0;
         pointerDelta.current.y = 0;
         fpsCam.rotation.set(fpsPitch.current, fpsYaw.current, 0);
+
+        // joystick movement
+        const { x: mx, y: my } = moveInput.current;
+        if (mx !== 0 || my !== 0) {
+          const now = performance.now();
+          const dt = Math.min((now - lastTime) / 1000, 0.1);
+          lastTime = now;
+          const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(fpsCam.quaternion);
+          forward.y = 0;
+          forward.normalize();
+          const right = new THREE.Vector3(1, 0, 0).applyQuaternion(fpsCam.quaternion);
+          right.y = 0;
+          right.normalize();
+          fpsCam.position.addScaledVector(right, mx * MOVE_SPEED * dt);
+          fpsCam.position.addScaledVector(forward, my * MOVE_SPEED * dt);
+          fpsCam.position.y = 1.7;
+        } else {
+          lastTime = performance.now();
+        }
       }
       const activeCam = m === 'orbit' ? orbitCam : fpsCam;
       renderer.render(scene, activeCam);
@@ -479,7 +509,51 @@ export default function CityCanvas() {
     container.addEventListener('pointerup', onPointerUp);
     container.addEventListener('pointerleave', onPointerUp);
 
+    // joystick handlers
+    function handleJoystick(cx: number, cy: number) {
+      const dx = cx - joystickCenter.current.x;
+      const dy = cy - joystickCenter.current.y;
+      const r = JOYSTICK_RADIUS;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const clamped = Math.min(dist, r);
+      const nx = dist > 0 ? (dx / dist) * (clamped / r) : 0;
+      const ny = dist > 0 ? (dy / dist) * (clamped / r) : 0;
+      moveInput.current.x = nx;
+      moveInput.current.y = -ny; // invert Y: up = forward
+      if (knobRef.current) {
+        knobRef.current.style.transform = `translate(${nx * r * 0.7}px, ${ny * r * 0.7}px)`;
+      }
+    }
+    function onJoystickDown(e: PointerEvent) {
+      e.stopPropagation();
+      e.preventDefault();
+      joystickActive.current = true;
+      const rect = joystickRef.current!.getBoundingClientRect();
+      joystickCenter.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      joystickRef.current!.setPointerCapture(e.pointerId);
+      handleJoystick(e.clientX, e.clientY);
+    }
+    function onJoystickMove(e: PointerEvent) {
+      if (!joystickActive.current) return;
+      handleJoystick(e.clientX, e.clientY);
+    }
+    function onJoystickUp() {
+      joystickActive.current = false;
+      moveInput.current.x = 0;
+      moveInput.current.y = 0;
+      if (knobRef.current) knobRef.current.style.transform = 'translate(0px, 0px)';
+    }
+    const joyEl = joystickRef.current!;
+    joyEl.addEventListener('pointerdown', onJoystickDown);
+    joyEl.addEventListener('pointermove', onJoystickMove);
+    joyEl.addEventListener('pointerup', onJoystickUp);
+    joyEl.addEventListener('pointerleave', onJoystickUp);
+
     return () => {
+      joyEl.removeEventListener('pointerdown', onJoystickDown);
+      joyEl.removeEventListener('pointermove', onJoystickMove);
+      joyEl.removeEventListener('pointerup', onJoystickUp);
+      joyEl.removeEventListener('pointerleave', onJoystickUp);
       container.removeEventListener('pointerdown', onPointerDown);
       container.removeEventListener('pointermove', onPointerMove);
       container.removeEventListener('pointerup', onPointerUp);
@@ -506,6 +580,26 @@ export default function CityCanvas() {
       >
         {mode === 'orbit' ? '🎥 FPS' : '🛰️ Orbit'}
       </button>
+      {mode === 'fps' && (
+        <div
+          ref={joystickRef}
+          className="absolute bottom-8 left-8 z-10 rounded-full border-2 border-cyan-400/40 bg-cyan-500/10"
+          style={{ width: JOYSTICK_RADIUS * 2, height: JOYSTICK_RADIUS * 2, touchAction: 'none' }}
+        >
+          <div
+            ref={knobRef}
+            className="absolute rounded-full bg-cyan-400/60"
+            style={{
+              width: JOYSTICK_RADIUS * 0.8,
+              height: JOYSTICK_RADIUS * 0.8,
+              top: '50%',
+              left: '50%',
+              marginLeft: -(JOYSTICK_RADIUS * 0.4),
+              marginTop: -(JOYSTICK_RADIUS * 0.4),
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
