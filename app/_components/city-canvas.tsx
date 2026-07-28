@@ -184,6 +184,14 @@ export default function CityCanvas() {
   const modeRef = useRef<CameraMode>('orbit');
   const [mode, setMode] = useState<CameraMode>('orbit');
 
+  // fps camera look state
+  const fpsYaw = useRef(0);
+  const fpsPitch = useRef(0);
+  const isDragging = useRef(false);
+  const lastPointer = useRef({ x: 0, y: 0 });
+  const pointerDelta = useRef({ x: 0, y: 0 });
+  const SENSITIVITY = 0.003;
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -221,7 +229,10 @@ export default function CityCanvas() {
     // fps camera — eye height, on the first avenue sidewalk
     const fpsCam = new THREE.PerspectiveCamera(70, width / height, 0.5, 300);
     fpsCam.position.set(0, 1.7, 0);
-    fpsCam.lookAt(0, 1.7, -AVENUE_SEPARATION);
+    fpsYaw.current = 0;
+    fpsPitch.current = 0;
+    fpsCam.rotation.order = 'YXZ';
+    fpsCam.rotation.set(0, 0, 0); // looks down -Z, along first avenue
 
     const ambient = new THREE.AmbientLight('#8899aa', 2.0);
     scene.add(ambient);
@@ -418,7 +429,17 @@ export default function CityCanvas() {
       requestAnimationFrame(animate);
       const m = modeRef.current;
       controls.enabled = m === 'orbit';
-      if (m === 'orbit') controls.update();
+      if (m === 'orbit') {
+        controls.update();
+      } else {
+        // apply accumulated pointer delta
+        fpsYaw.current -= pointerDelta.current.x * SENSITIVITY;
+        fpsPitch.current -= pointerDelta.current.y * SENSITIVITY;
+        fpsPitch.current = Math.max(-Math.PI / 2.4, Math.min(Math.PI / 2.4, fpsPitch.current));
+        pointerDelta.current.x = 0;
+        pointerDelta.current.y = 0;
+        fpsCam.rotation.set(fpsPitch.current, fpsYaw.current, 0);
+      }
       const activeCam = m === 'orbit' ? orbitCam : fpsCam;
       renderer.render(scene, activeCam);
     }
@@ -435,7 +456,34 @@ export default function CityCanvas() {
     }
     window.addEventListener('resize', onResize);
 
+    // pointer drag handlers for FPS look
+    function onPointerDown(e: PointerEvent) {
+      if (modeRef.current !== 'fps') return;
+      isDragging.current = true;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      container!.setPointerCapture(e.pointerId);
+    }
+    function onPointerMove(e: PointerEvent) {
+      if (!isDragging.current) return;
+      const dx = e.clientX - lastPointer.current.x;
+      const dy = e.clientY - lastPointer.current.y;
+      pointerDelta.current.x += dx;
+      pointerDelta.current.y += dy;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+    }
+    function onPointerUp() {
+      isDragging.current = false;
+    }
+    container.addEventListener('pointerdown', onPointerDown);
+    container.addEventListener('pointermove', onPointerMove);
+    container.addEventListener('pointerup', onPointerUp);
+    container.addEventListener('pointerleave', onPointerUp);
+
     return () => {
+      container.removeEventListener('pointerdown', onPointerDown);
+      container.removeEventListener('pointermove', onPointerMove);
+      container.removeEventListener('pointerup', onPointerUp);
+      container.removeEventListener('pointerleave', onPointerUp);
       window.removeEventListener('resize', onResize);
       renderer.dispose();
       if (container) container.removeChild(renderer.domElement);
