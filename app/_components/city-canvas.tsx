@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { generateBuilding } from '@/lib/generator/building';
 import type { Building, Part } from '@/lib/types';
+
+type CameraMode = 'orbit' | 'fps';
 
 // ── pony tail: geometry pool — one alloc, reused everywhere ──
 const GEO: Record<string, THREE.BufferGeometry> = {
@@ -179,6 +181,8 @@ const BUILDINGS_LATERAL = 12; // ponytail: outer lateral rows, continuous (no cr
 
 export default function CityCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const modeRef = useRef<CameraMode>('orbit');
+  const [mode, setMode] = useState<CameraMode>('orbit');
 
   useEffect(() => {
     const container = containerRef.current;
@@ -200,11 +204,12 @@ export default function CityCanvas() {
     scene.background = new THREE.Color('#c0c5ca');
     scene.fog = new THREE.Fog('#c0c5ca', 40, 160);
 
-    const camera = new THREE.PerspectiveCamera(50, width / height, 1, 300);
-    camera.position.set(25, 22, 60);
-    camera.lookAt(0, 5, -AVENUE_SEPARATION);
+    // orbit camera
+    const orbitCam = new THREE.PerspectiveCamera(50, width / height, 1, 300);
+    orbitCam.position.set(25, 22, 60);
+    orbitCam.lookAt(0, 5, -AVENUE_SEPARATION);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(orbitCam, renderer.domElement);
     controls.target.set(0, 5, -AVENUE_SEPARATION);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
@@ -212,6 +217,11 @@ export default function CityCanvas() {
     controls.maxDistance = 120;
     controls.maxPolarAngle = Math.PI * 0.45;
     controls.update();
+
+    // fps camera — eye height, on the first avenue sidewalk
+    const fpsCam = new THREE.PerspectiveCamera(70, width / height, 0.5, 300);
+    fpsCam.position.set(0, 1.7, 0);
+    fpsCam.lookAt(0, 1.7, -AVENUE_SEPARATION);
 
     const ambient = new THREE.AmbientLight('#8899aa', 2.0);
     scene.add(ambient);
@@ -406,16 +416,21 @@ export default function CityCanvas() {
 
     function animate() {
       requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
+      const m = modeRef.current;
+      controls.enabled = m === 'orbit';
+      if (m === 'orbit') controls.update();
+      const activeCam = m === 'orbit' ? orbitCam : fpsCam;
+      renderer.render(scene, activeCam);
     }
     animate();
 
     function onResize() {
       const w = container!.clientWidth;
       const h = container!.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+      orbitCam.aspect = w / h;
+      orbitCam.updateProjectionMatrix();
+      fpsCam.aspect = w / h;
+      fpsCam.updateProjectionMatrix();
       renderer.setSize(w, h);
     }
     window.addEventListener('resize', onResize);
@@ -428,10 +443,21 @@ export default function CityCanvas() {
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-full"
-      style={{ minHeight: '100vh' }}
-    />
+    <div ref={containerRef} className="w-full h-full relative" style={{ minHeight: '100vh' }}>
+      <button
+        onClick={() => {
+          setMode((m) => {
+            const next = m === 'orbit' ? 'fps' : 'orbit';
+            modeRef.current = next;
+            return next;
+          });
+        }}
+        className="absolute top-4 right-4 z-10 px-4 py-2 rounded bg-cyan-500/80 text-white font-mono text-sm
+                   hover:bg-cyan-400/90 transition-colors backdrop-blur-sm border border-cyan-400/30"
+        style={{ textShadow: '0 0 8px rgba(0,255,255,0.5)' }}
+      >
+        {mode === 'orbit' ? '🎥 FPS' : '🛰️ Orbit'}
+      </button>
+    </div>
   );
 }
